@@ -1,0 +1,214 @@
+// Ticketeira — plataforma de venda de ingressos
+//
+// Banco: PostgreSQL. O acesso usa driver adapter (pg) + query compiler,
+// o que dispensa o binário Rust do Prisma e funciona bem em serverless
+// (Vercel, Railway, Fly) e em VPS.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+// ---------------------------------------------------------------------------
+// Usuários
+// ---------------------------------------------------------------------------
+
+model User {
+  id           String   @id @default(cuid())
+  name         String
+  email        String   @unique
+  phone        String?
+  document     String? // CPF/CNPJ
+  passwordHash String
+  role         String   @default("CUSTOMER") // CUSTOMER | ORGANIZER | ADMIN
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  organizer Organizer?
+  orders    Order[]
+}
+
+model Organizer {
+  id          String   @id @default(cuid())
+  userId      String   @unique
+  displayName String
+  slug        String   @unique
+  description String?
+  document    String? // CNPJ do produtor
+  pixKey      String? // chave para repasse
+  bankInfo    String?
+  verified    Boolean  @default(false)
+  createdAt   DateTime @default(now())
+
+  user   User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  events Event[]
+}
+
+// ---------------------------------------------------------------------------
+// Eventos e ingressos
+// ---------------------------------------------------------------------------
+
+model Event {
+  id          String  @id @default(cuid())
+  slug        String  @unique
+  title       String
+  subtitle    String?
+  description String
+  category    String  @default("Show")
+  coverUrl    String?
+
+  venueName String
+  address   String
+  city      String
+  state     String
+
+  startsAt DateTime
+  endsAt   DateTime?
+
+  status      String @default("DRAFT") // DRAFT | PUBLISHED | CANCELLED | FINISHED
+  ageRating   String @default("Livre")
+  maxPerOrder Int    @default(6)
+
+  // Regras financeiras
+  serviceFeeBps Int    @default(1000) // 1000 = 10%
+  feeMode       String @default("BUYER") // BUYER = taxa somada ao ingresso | ORGANIZER = taxa absorvida
+
+  organizerId String
+  organizer   Organizer @relation(fields: [organizerId], references: [id], onDelete: Cascade)
+
+  ticketTypes TicketType[]
+  orders      Order[]
+  tickets     Ticket[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([status, startsAt])
+  @@index([city])
+}
+
+/// Lote / setor de ingresso
+model TicketType {
+  id          String  @id @default(cuid())
+  eventId     String
+  name        String // "1º Lote — Pista"
+  description String?
+  priceCents  Int
+  quantity    Int // estoque total do lote
+  sold        Int     @default(0)
+  reserved    Int     @default(0) // reservado por pedidos pendentes
+  maxPerOrder Int     @default(6)
+  position    Int     @default(0)
+  active      Boolean @default(true)
+
+  salesStartAt DateTime?
+  salesEndAt   DateTime?
+
+  event      Event       @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  orderItems OrderItem[]
+  tickets    Ticket[]
+
+  createdAt DateTime @default(now())
+
+  @@index([eventId])
+}
+
+// ---------------------------------------------------------------------------
+// Pedidos e pagamentos
+// ---------------------------------------------------------------------------
+
+model Order {
+  id      String @id @default(cuid())
+  code    String @unique // código curto exibido ao cliente
+  eventId String
+  userId  String?
+
+  buyerName     String
+  buyerEmail    String
+  buyerDocument String?
+  buyerPhone    String?
+
+  subtotalCents Int // valor dos ingressos
+  feeCents      Int // taxa de serviço
+  totalCents    Int // o que o comprador paga
+
+  status        String  @default("PENDING") // PENDING | PAID | EXPIRED | CANCELLED | REFUNDED
+  paymentMethod String // PIX | CARD
+
+  provider       String? // mock | mercadopago
+  providerRef    String? // id da cobrança no gateway
+  pixQrCode      String? // payload copia-e-cola
+  pixQrCodeImage String? // data:image/png;base64
+  cardBrand      String?
+  cardLast4      String?
+
+  expiresAt DateTime?
+  paidAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+
+  event  Event       @relation(fields: [eventId], references: [id])
+  user   User?       @relation(fields: [userId], references: [id])
+  items  OrderItem[]
+  ticket Ticket[]
+
+  @@index([status])
+  @@index([buyerEmail])
+  @@index([providerRef])
+}
+
+model OrderItem {
+  id             String @id @default(cuid())
+  orderId        String
+  ticketTypeId   String
+  quantity       Int
+  unitPriceCents Int
+  unitFeeCents   Int
+
+  order      Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  ticketType TicketType @relation(fields: [ticketTypeId], references: [id])
+
+  @@index([orderId])
+}
+
+/// Ingresso individual, emitido após confirmação do pagamento
+model Ticket {
+  id           String  @id @default(cuid())
+  code         String  @unique // código único do ingresso (vai no QR)
+  orderId      String
+  eventId      String
+  ticketTypeId String
+
+  attendeeName  String
+  attendeeEmail String
+
+  status      String    @default("VALID") // VALID | USED | CANCELLED
+  checkedInAt DateTime?
+  checkedInBy String?
+
+  createdAt DateTime @default(now())
+
+  order      Order      @relation(fields: [orderId], references: [id], onDelete: Cascade)
+  event      Event      @relation(fields: [eventId], references: [id])
+  ticketType TicketType @relation(fields: [ticketTypeId], references: [id])
+
+  @@index([eventId, status])
+  @@index([orderId])
+}
+
+/// Log de notificações recebidas do gateway (idempotência e auditoria)
+model WebhookLog {
+  id         String   @id @default(cuid())
+  provider   String
+  externalId String?
+  eventType  String?
+  payload    String
+  processed  Boolean  @default(false)
+  createdAt  DateTime @default(now())
+
+  @@index([provider, externalId])
+}

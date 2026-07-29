@@ -1,0 +1,76 @@
+@import "tailwindcss";
+
+@theme {
+  --color-ink-950: #0a0a12;
+  --color-ink-900: #101021;
+  --color-ink-800: #17172c;
+  --color-ink-700: #22223d;
+  --color-ink-600: #32324f;
+  --color-brand-300: #c4b5fd;
+  --color-brand-400: #a78bfa;
+  --color-brand-500: #8b5cf6;
+  --color-brand-600: #7c3aed;
+  --color-accent-400: #f472b6;
+  --color-accent-500: #ec4899;
+  --font-sans: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+:root {
+  color-scheme: dark;
+}
+
+html,
+body {
+  background: var(--color-ink-950);
+  color: #e8e8f2;
+  -webkit-font-smoothing: antialiased;
+}
+
+@utility card {
+  @apply rounded-2xl border border-white/10 bg-ink-900 p-6;
+}
+
+@utility input {
+  @apply w-full rounded-xl border border-white/10 bg-ink-800 px-4 py-2.5 text-sm text-white
+    placeholder:text-white/30 outline-none transition
+    focus:border-brand-500 focus:ring-2 focus:ring-brand-500/30;
+}
+
+@utility label {
+  @apply mb-1.5 block text-xs font-medium uppercase tracking-wide text-white/50;
+}
+
+@utility btn {
+  @apply inline-flex items-center justify-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold
+    transition disabled:cursor-not-allowed disabled:opacity-50;
+}
+
+@utility btn-primary {
+  @apply btn bg-linear-to-r from-brand-600 to-accent-500 text-white
+    hover:brightness-110 active:brightness-95;
+}
+
+@utility btn-ghost {
+  @apply btn border border-white/15 bg-white/5 text-white hover:bg-white/10;
+}
+
+@utility badge {
+  @apply inline-flex items-center rounded-full px-2.5 py-1 text-xs font-medium;
+}
+
+@utility gradient-text {
+  @apply bg-linear-to-r from-brand-300 via-brand-400 to-accent-400
+    bg-clip-text text-transparent;
+}
+
+::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+::-webkit-scrollbar-thumb {
+  background: #2a2a44;
+  border-radius: 9999px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}

@@ -1,0 +1,123 @@
+# Stack de produção da Ticketeira para VPS.
+#
+#   caddy    -> proxy reverso com HTTPS automático (Let's Encrypt)
+#   app      -> a aplicação Next.js
+#   migrate  -> roda as migrations e sai; o app só sobe depois que ela termina
+#   db       -> PostgreSQL 16 com volume persistente
+#   backup   -> dump diário do banco, com retenção
+#
+# Subir:      docker compose -f docker-compose.prod.yml up -d --build
+# Logs:       docker compose -f docker-compose.prod.yml logs -f app
+# Atualizar:  git pull && docker compose -f docker-compose.prod.yml up -d --build
+
+name: ticketeira
+
+x-app-env: &app-env
+  DATABASE_URL: postgresql://${POSTGRES_USER:-ticketeira}:${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env.production}@db:5432/${POSTGRES_DB:-ticketeira}?schema=public
+  AUTH_SECRET: ${AUTH_SECRET:?defina AUTH_SECRET no .env.production}
+  NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL:?defina NEXT_PUBLIC_APP_URL no .env.production}
+  NEXT_PUBLIC_BRAND_NAME: ${NEXT_PUBLIC_BRAND_NAME:-Ticketeira}
+  PAYMENT_PROVIDER: ${PAYMENT_PROVIDER:-mock}
+  MP_ACCESS_TOKEN: ${MP_ACCESS_TOKEN:-}
+  MP_WEBHOOK_SECRET: ${MP_WEBHOOK_SECRET:-}
+  MOCK_PIX_KEY: ${MOCK_PIX_KEY:-}
+  DEFAULT_SERVICE_FEE_BPS: ${DEFAULT_SERVICE_FEE_BPS:-1000}
+  ORDER_EXPIRATION_MINUTES: ${ORDER_EXPIRATION_MINUTES:-30}
+  TZ: America/Sao_Paulo
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-ticketeira}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?defina POSTGRES_PASSWORD no .env.production}
+      POSTGRES_DB: ${POSTGRES_DB:-ticketeira}
+      TZ: America/Sao_Paulo
+    volumes:
+      - db-data:/var/lib/postgresql/data
+    # Sem "ports": o banco não fica exposto na internet, só na rede interna.
+    healthcheck:
+      test:
+        ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-ticketeira} -d ${POSTGRES_DB:-ticketeira}"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+    networks: [internal]
+
+  migrate:
+    build:
+      context: .
+      target: migrator
+    environment: *app-env
+    depends_on:
+      db:
+        condition: service_healthy
+    restart: "no"
+    networks: [internal]
+
+  app:
+    build:
+      context: .
+      target: runner
+      args:
+        NEXT_PUBLIC_APP_URL: ${NEXT_PUBLIC_APP_URL}
+        NEXT_PUBLIC_BRAND_NAME: ${NEXT_PUBLIC_BRAND_NAME:-Ticketeira}
+    restart: unless-stopped
+    environment: *app-env
+    depends_on:
+      db:
+        condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
+    expose:
+      - "3000"
+    networks: [internal, web]
+
+  caddy:
+    image: caddy:2-alpine
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    environment:
+      APP_DOMAIN: ${APP_DOMAIN:?defina APP_DOMAIN no .env.production}
+      LETSENCRYPT_EMAIL: ${LETSENCRYPT_EMAIL:?defina LETSENCRYPT_EMAIL no .env.production}
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy-data:/data
+      - caddy-config:/config
+    depends_on:
+      - app
+    networks: [web]
+
+  backup:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      PGUSER: ${POSTGRES_USER:-ticketeira}
+      PGPASSWORD: ${POSTGRES_PASSWORD}
+      PGDATABASE: ${POSTGRES_DB:-ticketeira}
+      PGHOST: db
+      BACKUP_RETENTION_DAYS: ${BACKUP_RETENTION_DAYS:-14}
+      TZ: America/Sao_Paulo
+    volumes:
+      - ./backups:/backups
+      - ./scripts/backup.sh:/usr/local/bin/backup.sh:ro
+    entrypoint: ["/bin/sh", "/usr/local/bin/backup.sh"]
+    depends_on:
+      db:
+        condition: service_healthy
+    networks: [internal]
+
+volumes:
+  db-data:
+  caddy-data:
+  caddy-config:
+
+networks:
+  internal:
+    internal: true
+  web:
