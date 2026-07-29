@@ -42,7 +42,7 @@ export class MockProvider implements PaymentProvider {
 
     const payload = buildPixPayload({
       pixKey: process.env.MOCK_PIX_KEY || "pagamentos@ticketeira.com.br",
-      merchantName: process.env.NEXT_PUBLIC_BRAND_NAME || "Ticketeira",
+      merchantName: process.env.NEXT_PUBLIC_BRAND_NAME || "TicketDaun",
       merchantCity: "SAO PAULO",
       amountCents: input.amountCents,
       txid: input.orderCode.replace(/-/g, ""),

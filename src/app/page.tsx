@@ -5,7 +5,7 @@ import { expireStaleOrders } from "@/lib/orders";
 
 export const dynamic = "force-dynamic";
 
-const BRAND = process.env.NEXT_PUBLIC_BRAND_NAME || "Ticketeira";
+const BRAND = process.env.NEXT_PUBLIC_BRAND_NAME || "TicketDaun";
 
 export default async function HomePage() {
   await expireStaleOrders();

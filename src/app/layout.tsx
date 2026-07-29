@@ -4,7 +4,7 @@ import "./globals.css";
 import { getSession } from "@/lib/auth";
 import { UserMenu } from "@/components/user-menu";
 
-const BRAND = process.env.NEXT_PUBLIC_BRAND_NAME || "Ticketeira";
+const BRAND = process.env.NEXT_PUBLIC_BRAND_NAME || "TicketDaun";
 
 export const metadata: Metadata = {
   title: {

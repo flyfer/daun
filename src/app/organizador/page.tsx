@@ -9,7 +9,7 @@ import { StatusBadge } from "@/components/status-badge";
 export const dynamic = "force-dynamic";
 export const metadata = { title: "Painel do produtor" };
 
-const BRAND = process.env.NEXT_PUBLIC_BRAND_NAME || "Ticketeira";
+const BRAND = process.env.NEXT_PUBLIC_BRAND_NAME || "TicketDaun";
 
 export default async function OrganizerPage() {
   const user = await getCurrentUser();

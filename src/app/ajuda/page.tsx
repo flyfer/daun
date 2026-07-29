@@ -2,7 +2,7 @@ import Link from "next/link";
 
 export const metadata = { title: "Ajuda" };
 
-const BRAND = process.env.NEXT_PUBLIC_BRAND_NAME || "Ticketeira";
+const BRAND = process.env.NEXT_PUBLIC_BRAND_NAME || "TicketDaun";
 
 const FAQ = [
   {
