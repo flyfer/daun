@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireOrganizer } from "@/lib/auth";
+import { parseSaoPauloDatetime } from "@/lib/dates";
 
 const schema = z.object({
   status: z.enum(["DRAFT", "PUBLISHED", "CANCELLED", "FINISHED"]).optional(),
@@ -56,11 +57,12 @@ export async function PATCH(
     }
   }
 
-  const startsAt = d.startsAt ? new Date(d.startsAt) : undefined;
+  const startsAt = d.startsAt ? parseSaoPauloDatetime(d.startsAt) : undefined;
   if (startsAt && Number.isNaN(startsAt.getTime())) {
     return NextResponse.json({ error: "Data de início inválida." }, { status: 400 });
   }
-  const endsAt = d.endsAt !== undefined ? (d.endsAt ? new Date(d.endsAt) : null) : undefined;
+  const endsAt =
+    d.endsAt !== undefined ? (d.endsAt ? parseSaoPauloDatetime(d.endsAt) : null) : undefined;
   if (endsAt && endsAt < (startsAt ?? event.startsAt)) {
     return NextResponse.json(
       { error: "O término precisa ser depois do início." },

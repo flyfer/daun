@@ -38,16 +38,31 @@ export function formatDateTime(date: Date): string {
 }
 
 /**
- * "para input datetime-local" — YYYY-MM-DDTHH:mm
+ * "para input datetime-local" — YYYY-MM-DDTHH:mm no fuso America/Sao_Paulo.
  *
- * Usa componentes UTC porque o servidor (Vercel) roda em UTC e interpreta o
- * valor do datetime-local como horário local do processo ao criar o evento
- * (new Date(string)). Isso mantém o round-trip: o organizador reabre o
- * formulário e vê os mesmos números que digitou.
+ * Sempre no fuso do evento (independente do fuso do servidor), para bater
+ * com o que é exibido em formatDateTime/formatDateLong etc.
  */
 export function toDatetimeLocal(date: Date): string {
-  const pad = (n: number) => String(n).padStart(2, "0");
-  return `${date.getUTCFullYear()}-${pad(date.getUTCMonth() + 1)}-${pad(
-    date.getUTCDate(),
-  )}T${pad(date.getUTCHours())}:${pad(date.getUTCMinutes())}`;
+  const parts = new Intl.DateTimeFormat("en-CA", {
+    timeZone: TZ,
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit",
+    hour12: false,
+  }).formatToParts(date);
+  const get = (type: string) => parts.find((p) => p.type === type)?.value ?? "00";
+  return `${get("year")}-${get("month")}-${get("day")}T${get("hour")}:${get("minute")}`;
+}
+
+/**
+ * Converte o valor de um input datetime-local (ex: "2026-08-22T16:00"),
+ * interpretado como horário de America/Sao_Paulo, para o instante UTC
+ * correspondente. O Brasil não tem mais horário de verão desde 2019, então
+ * o offset -03:00 é fixo.
+ */
+export function parseSaoPauloDatetime(value: string): Date {
+  return new Date(`${value}:00-03:00`);
 }

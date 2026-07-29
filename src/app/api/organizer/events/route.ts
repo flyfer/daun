@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireOrganizer } from "@/lib/auth";
 import { slugify, uniqueSlug } from "@/lib/ids";
+import { parseSaoPauloDatetime } from "@/lib/dates";
 
 const ticketTypeSchema = z.object({
   name: z.string().min(1, "Dê um nome ao lote."),
@@ -50,11 +51,11 @@ export async function POST(req: Request) {
   }
   const data = parsed.data;
 
-  const startsAt = new Date(data.startsAt);
+  const startsAt = parseSaoPauloDatetime(data.startsAt);
   if (Number.isNaN(startsAt.getTime())) {
     return NextResponse.json({ error: "Data de início inválida." }, { status: 400 });
   }
-  const endsAt = data.endsAt ? new Date(data.endsAt) : null;
+  const endsAt = data.endsAt ? parseSaoPauloDatetime(data.endsAt) : null;
   if (endsAt && endsAt < startsAt) {
     return NextResponse.json(
       { error: "O término precisa ser depois do início." },
