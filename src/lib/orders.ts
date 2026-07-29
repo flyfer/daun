@@ -1,6 +1,7 @@
 import { prisma } from "./prisma";
 import { newOrderCode, newTicketCode } from "./ids";
 import { calcFeeCents } from "./money";
+import { sendOrderConfirmationEmail } from "./email";
 
 export type CartLine = { ticketTypeId: string; quantity: number };
 
@@ -135,13 +136,13 @@ export async function createOrder(params: {
  * Idempotente — chamar duas vezes não duplica ingressos.
  */
 export async function confirmOrderPayment(orderId: string) {
-  return prisma.$transaction(async (tx) => {
+  const { order: updated, justPaid } = await prisma.$transaction(async (tx) => {
     const order = await tx.order.findUnique({
       where: { id: orderId },
       include: { items: { include: { ticketType: true } } },
     });
-    if (!order) return null;
-    if (order.status === "PAID") return order; // idempotência
+    if (!order) return { order: null, justPaid: false };
+    if (order.status === "PAID") return { order, justPaid: false }; // idempotência
 
     for (const item of order.items) {
       await tx.ticketType.update({
@@ -166,11 +167,20 @@ export async function confirmOrderPayment(orderId: string) {
       }
     }
 
-    return tx.order.update({
+    const paid = await tx.order.update({
       where: { id: order.id },
       data: { status: "PAID", paidAt: new Date() },
     });
+    return { order: paid, justPaid: true };
   });
+
+  if (justPaid && updated) {
+    sendOrderConfirmationEmail(updated.id).catch((e) =>
+      console.error("Falha ao enviar e-mail de confirmação de compra", e),
+    );
+  }
+
+  return updated;
 }
 
 /** Cancela um pedido pendente e devolve o estoque reservado. */

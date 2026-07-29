@@ -3,6 +3,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { createSession, hashPassword } from "@/lib/auth";
 import { slugify, uniqueSlug } from "@/lib/ids";
+import { sendWelcomeEmail } from "@/lib/email";
 
 const schema = z.object({
   name: z.string().min(3, "Informe seu nome completo."),
@@ -60,6 +61,10 @@ export async function POST(req: Request) {
     name: user.name,
     role: user.role,
   });
+
+  sendWelcomeEmail({ name: user.name, email: user.email }).catch((e) =>
+    console.error("Falha ao enviar e-mail de boas-vindas", e),
+  );
 
   return NextResponse.json({ ok: true, organizer: Boolean(organizer) });
 }
