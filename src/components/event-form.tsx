@@ -32,25 +32,54 @@ const emptyRow = (): TicketRow => ({
   maxPerOrder: "6",
 });
 
-export function EventForm({ defaultFeeBps }: { defaultFeeBps: number }) {
+export type EventFormValues = {
+  title: string;
+  subtitle: string;
+  description: string;
+  category: string;
+  coverUrl: string;
+  venueName: string;
+  address: string;
+  city: string;
+  state: string;
+  startsAt: string;
+  endsAt: string;
+  ageRating: string;
+  maxPerOrder: string;
+  serviceFeeBps: string;
+  feeMode: "BUYER" | "ORGANIZER";
+};
+
+export function EventForm({
+  defaultFeeBps,
+  eventId,
+  initialValues,
+}: {
+  defaultFeeBps: number;
+  eventId?: string;
+  initialValues?: EventFormValues;
+}) {
   const router = useRouter();
-  const [form, setForm] = useState({
-    title: "",
-    subtitle: "",
-    description: "",
-    category: "Show",
-    coverUrl: "",
-    venueName: "",
-    address: "",
-    city: "",
-    state: "",
-    startsAt: "",
-    endsAt: "",
-    ageRating: "Livre",
-    maxPerOrder: "6",
-    serviceFeeBps: String(defaultFeeBps),
-    feeMode: "BUYER" as "BUYER" | "ORGANIZER",
-  });
+  const isEdit = Boolean(eventId);
+  const [form, setForm] = useState<EventFormValues>(
+    initialValues ?? {
+      title: "",
+      subtitle: "",
+      description: "",
+      category: "Show",
+      coverUrl: "",
+      venueName: "",
+      address: "",
+      city: "",
+      state: "",
+      startsAt: "",
+      endsAt: "",
+      ageRating: "Livre",
+      maxPerOrder: "6",
+      serviceFeeBps: String(defaultFeeBps),
+      feeMode: "BUYER",
+    },
+  );
   const [rows, setRows] = useState<TicketRow[]>([emptyRow()]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -65,28 +94,40 @@ export function EventForm({ defaultFeeBps }: { defaultFeeBps: number }) {
     setError(null);
     setLoading(true);
     try {
-      const res = await fetch("/api/organizer/events", {
-        method: "POST",
+      const url = isEdit ? `/api/organizer/events/${eventId}` : "/api/organizer/events";
+      const body = isEdit
+        ? {
+            ...form,
+            maxPerOrder: Number(form.maxPerOrder) || 6,
+            serviceFeeBps: Number(form.serviceFeeBps) || defaultFeeBps,
+          }
+        : {
+            ...form,
+            maxPerOrder: Number(form.maxPerOrder) || 6,
+            serviceFeeBps: Number(form.serviceFeeBps) || defaultFeeBps,
+            publish,
+            ticketTypes: rows
+              .filter((r) => r.name.trim())
+              .map((r) => ({
+                name: r.name,
+                description: r.description || undefined,
+                priceCents: parseBRLToCents(r.price || "0"),
+                quantity: Number(r.quantity) || 0,
+                maxPerOrder: Number(r.maxPerOrder) || 6,
+              })),
+          };
+      const res = await fetch(url, {
+        method: isEdit ? "PATCH" : "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          ...form,
-          maxPerOrder: Number(form.maxPerOrder) || 6,
-          serviceFeeBps: Number(form.serviceFeeBps) || defaultFeeBps,
-          publish,
-          ticketTypes: rows
-            .filter((r) => r.name.trim())
-            .map((r) => ({
-              name: r.name,
-              description: r.description || undefined,
-              priceCents: parseBRLToCents(r.price || "0"),
-              quantity: Number(r.quantity) || 0,
-              maxPerOrder: Number(r.maxPerOrder) || 6,
-            })),
-        }),
+        body: JSON.stringify(body),
       });
       const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Não foi possível criar o evento.");
-      router.push(`/organizador/eventos/${data.id}`);
+      if (!res.ok)
+        throw new Error(
+          data.error ?? (isEdit ? "Não foi possível salvar as alterações." : "Não foi possível criar o evento."),
+        );
+      const id = isEdit ? eventId : data.id;
+      router.push(`/organizador/eventos/${id}`);
       router.refresh();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro inesperado.");
@@ -202,6 +243,7 @@ export function EventForm({ defaultFeeBps }: { defaultFeeBps: number }) {
         </div>
       </section>
 
+      {!isEdit && (
       <section className="card space-y-4">
         <div className="flex items-center justify-between">
           <h2 className="font-bold">Ingressos</h2>
@@ -291,6 +333,7 @@ export function EventForm({ defaultFeeBps }: { defaultFeeBps: number }) {
           );
         })}
       </section>
+      )}
 
       <section className="card space-y-4">
         <h2 className="font-bold">Regras de venda</h2>
@@ -337,16 +380,33 @@ export function EventForm({ defaultFeeBps }: { defaultFeeBps: number }) {
       )}
 
       <div className="flex flex-wrap gap-3">
-        <button
-          className="btn-primary"
-          disabled={loading}
-          onClick={() => submit(true)}
-        >
-          {loading ? "Salvando..." : "Publicar evento"}
-        </button>
-        <button className="btn-ghost" disabled={loading} onClick={() => submit(false)}>
-          Salvar como rascunho
-        </button>
+        {isEdit ? (
+          <>
+            <button className="btn-primary" disabled={loading} onClick={() => submit(true)}>
+              {loading ? "Salvando..." : "Salvar alterações"}
+            </button>
+            <button
+              className="btn-ghost"
+              disabled={loading}
+              onClick={() => router.push(`/organizador/eventos/${eventId}`)}
+            >
+              Cancelar
+            </button>
+          </>
+        ) : (
+          <>
+            <button
+              className="btn-primary"
+              disabled={loading}
+              onClick={() => submit(true)}
+            >
+              {loading ? "Salvando..." : "Publicar evento"}
+            </button>
+            <button className="btn-ghost" disabled={loading} onClick={() => submit(false)}>
+              Salvar como rascunho
+            </button>
+          </>
+        )}
       </div>
     </div>
   );

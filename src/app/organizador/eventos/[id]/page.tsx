@@ -76,6 +76,9 @@ export default async function ManageEventPage({
         </div>
 
         <div className="flex flex-wrap gap-2">
+          <Link href={`/organizador/eventos/${event.id}/editar`} className="btn-ghost">
+            Editar
+          </Link>
           <Link href={`/e/${event.slug}`} className="btn-ghost">
             Ver página pública
           </Link>

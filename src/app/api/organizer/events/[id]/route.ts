@@ -8,6 +8,7 @@ const schema = z.object({
   title: z.string().min(3).optional(),
   subtitle: z.string().optional(),
   description: z.string().min(10).optional(),
+  category: z.string().min(1).optional(),
   coverUrl: z.string().url().optional().or(z.literal("")),
   venueName: z.string().min(2).optional(),
   address: z.string().min(3).optional(),
@@ -15,6 +16,7 @@ const schema = z.object({
   state: z.string().length(2).optional(),
   startsAt: z.string().optional(),
   endsAt: z.string().optional(),
+  ageRating: z.string().optional(),
   maxPerOrder: z.number().int().min(1).max(20).optional(),
   serviceFeeBps: z.number().int().min(0).max(3000).optional(),
   feeMode: z.enum(["BUYER", "ORGANIZER"]).optional(),
@@ -54,6 +56,18 @@ export async function PATCH(
     }
   }
 
+  const startsAt = d.startsAt ? new Date(d.startsAt) : undefined;
+  if (startsAt && Number.isNaN(startsAt.getTime())) {
+    return NextResponse.json({ error: "Data de início inválida." }, { status: 400 });
+  }
+  const endsAt = d.endsAt !== undefined ? (d.endsAt ? new Date(d.endsAt) : null) : undefined;
+  if (endsAt && endsAt < (startsAt ?? event.startsAt)) {
+    return NextResponse.json(
+      { error: "O término precisa ser depois do início." },
+      { status: 400 },
+    );
+  }
+
   await prisma.event.update({
     where: { id: event.id },
     data: {
@@ -61,13 +75,15 @@ export async function PATCH(
       ...(d.title ? { title: d.title } : {}),
       ...(d.subtitle !== undefined ? { subtitle: d.subtitle || null } : {}),
       ...(d.description ? { description: d.description } : {}),
+      ...(d.category ? { category: d.category } : {}),
       ...(d.coverUrl !== undefined ? { coverUrl: d.coverUrl || null } : {}),
       ...(d.venueName ? { venueName: d.venueName } : {}),
       ...(d.address ? { address: d.address } : {}),
       ...(d.city ? { city: d.city } : {}),
       ...(d.state ? { state: d.state.toUpperCase() } : {}),
-      ...(d.startsAt ? { startsAt: new Date(d.startsAt) } : {}),
-      ...(d.endsAt !== undefined ? { endsAt: d.endsAt ? new Date(d.endsAt) : null } : {}),
+      ...(startsAt ? { startsAt } : {}),
+      ...(endsAt !== undefined ? { endsAt } : {}),
+      ...(d.ageRating ? { ageRating: d.ageRating } : {}),
       ...(d.maxPerOrder ? { maxPerOrder: d.maxPerOrder } : {}),
       ...(d.serviceFeeBps !== undefined ? { serviceFeeBps: d.serviceFeeBps } : {}),
       ...(d.feeMode ? { feeMode: d.feeMode } : {}),
