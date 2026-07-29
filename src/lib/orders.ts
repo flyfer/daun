@@ -1,3 +1,4 @@
+import { after } from "next/server";
 import { prisma } from "./prisma";
 import { newOrderCode, newTicketCode } from "./ids";
 import { calcFeeCents } from "./money";
@@ -175,8 +176,10 @@ export async function confirmOrderPayment(orderId: string) {
   });
 
   if (justPaid && updated) {
-    sendOrderConfirmationEmail(updated.id).catch((e) =>
-      console.error("Falha ao enviar e-mail de confirmação de compra", e),
+    after(() =>
+      sendOrderConfirmationEmail(updated.id).catch((e) =>
+        console.error("Falha ao enviar e-mail de confirmação de compra", e),
+      ),
     );
   }
 

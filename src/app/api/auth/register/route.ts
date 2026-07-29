@@ -1,4 +1,4 @@
-import { NextResponse } from "next/server";
+import { NextResponse, after } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { createSession, hashPassword } from "@/lib/auth";
@@ -62,8 +62,10 @@ export async function POST(req: Request) {
     role: user.role,
   });
 
-  sendWelcomeEmail({ name: user.name, email: user.email }).catch((e) =>
-    console.error("Falha ao enviar e-mail de boas-vindas", e),
+  after(() =>
+    sendWelcomeEmail({ name: user.name, email: user.email }).catch((e) =>
+      console.error("Falha ao enviar e-mail de boas-vindas", e),
+    ),
   );
 
   return NextResponse.json({ ok: true, organizer: Boolean(organizer) });
