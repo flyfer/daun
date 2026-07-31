@@ -3,6 +3,7 @@
 import { useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { formatBRL, bpsToPercent } from "@/lib/money";
+import { MpCardBrick, type MpCardFormData } from "@/components/mp-card-brick";
 
 type TicketTypeView = {
   id: string;
@@ -44,13 +45,6 @@ export function CheckoutPanel({
     document: "",
     phone: "",
   });
-  const [card, setCard] = useState({
-    number: "",
-    holder: "",
-    exp: "",
-    cvv: "",
-    installments: 1,
-  });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
@@ -83,41 +77,55 @@ export function CheckoutPanel({
     setQty({ ...qty, [t.id]: Math.max(0, Math.min(next, cap)) });
   }
 
+  const lines = () =>
+    Object.entries(qty)
+      .filter(([, q]) => q > 0)
+      .map(([ticketTypeId, quantity]) => ({ ticketTypeId, quantity }));
+
+  async function placeOrder(card?: MpCardFormData) {
+    const res = await fetch("/api/orders", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        eventId,
+        paymentMethod: card ? "CARD" : method,
+        buyer,
+        lines: lines(),
+        card: card
+          ? {
+              token: card.token,
+              paymentMethodId: card.payment_method_id,
+              issuerId: card.issuer_id,
+              installments: card.installments,
+            }
+          : undefined,
+      }),
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.error ?? "Não foi possível concluir o pedido.");
+    router.push(`/pedido/${data.code}`);
+  }
+
   async function submit() {
     setError(null);
     setLoading(true);
     try {
-      const [expMonth, expYear] = card.exp.split("/").map((v) => Number(v.trim()));
-      const res = await fetch("/api/orders", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          eventId,
-          paymentMethod: method,
-          buyer,
-          lines: Object.entries(qty)
-            .filter(([, q]) => q > 0)
-            .map(([ticketTypeId, quantity]) => ({ ticketTypeId, quantity })),
-          card:
-            method === "CARD"
-              ? {
-                  number: card.number.replace(/\s/g, ""),
-                  holder: card.holder,
-                  expMonth: expMonth || 0,
-                  expYear: expYear ? (expYear < 100 ? 2000 + expYear : expYear) : 0,
-                  cvv: card.cvv,
-                  installments: card.installments,
-                }
-              : undefined,
-        }),
-      });
-
-      const data = await res.json();
-      if (!res.ok) throw new Error(data.error ?? "Não foi possível concluir o pedido.");
-      router.push(`/pedido/${data.code}`);
+      await placeOrder();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Erro inesperado.");
       setLoading(false);
+    }
+  }
+
+  async function submitCard(card: MpCardFormData) {
+    setError(null);
+    setLoading(true);
+    try {
+      await placeOrder(card);
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Erro inesperado.");
+      setLoading(false);
+      throw e; // deixa o Brick saber que falhou e liberar o botão de novo
     }
   }
 
@@ -293,66 +301,11 @@ export function CheckoutPanel({
               </div>
 
               {method === "CARD" && (
-                <div className="space-y-3 rounded-xl border border-white/10 p-4">
-                  <div>
-                    <label className="label">Número do cartão</label>
-                    <input
-                      className="input"
-                      inputMode="numeric"
-                      value={card.number}
-                      onChange={(e) => setCard({ ...card, number: e.target.value })}
-                      placeholder="0000 0000 0000 0000"
-                    />
-                  </div>
-                  <div>
-                    <label className="label">Nome impresso no cartão</label>
-                    <input
-                      className="input"
-                      value={card.holder}
-                      onChange={(e) => setCard({ ...card, holder: e.target.value })}
-                    />
-                  </div>
-                  <div className="grid grid-cols-3 gap-3">
-                    <div>
-                      <label className="label">Validade</label>
-                      <input
-                        className="input"
-                        value={card.exp}
-                        onChange={(e) => setCard({ ...card, exp: e.target.value })}
-                        placeholder="12/2030"
-                      />
-                    </div>
-                    <div>
-                      <label className="label">CVV</label>
-                      <input
-                        className="input"
-                        inputMode="numeric"
-                        value={card.cvv}
-                        onChange={(e) => setCard({ ...card, cvv: e.target.value })}
-                        placeholder="123"
-                      />
-                    </div>
-                    <div>
-                      <label className="label">Parcelas</label>
-                      <select
-                        className="input"
-                        value={card.installments}
-                        onChange={(e) =>
-                          setCard({ ...card, installments: Number(e.target.value) })
-                        }
-                      >
-                        {[1, 2, 3, 4, 6, 12].map((n) => (
-                          <option key={n} value={n}>
-                            {n}x
-                          </option>
-                        ))}
-                      </select>
-                    </div>
-                  </div>
-                  <p className="text-xs text-white/40">
-                    Ambiente de teste: qualquer número aprova; terminado em 1 recusa.
-                  </p>
-                </div>
+                <MpCardBrick
+                  amountCents={totals.total}
+                  payerEmail={buyer.email}
+                  onSubmit={submitCard}
+                />
               )}
             </div>
           )}
@@ -365,15 +318,15 @@ export function CheckoutPanel({
             </p>
           )}
 
-          <button className="btn-primary w-full" disabled={loading} onClick={submit}>
-            {loading
-              ? "Processando..."
-              : totals.total === 0
-                ? "Confirmar inscrição"
-                : method === "PIX"
-                  ? "Gerar Pix"
-                  : "Pagar com cartão"}
-          </button>
+          {!(totals.total > 0 && method === "CARD") && (
+            <button className="btn-primary w-full" disabled={loading} onClick={submit}>
+              {loading
+                ? "Processando..."
+                : totals.total === 0
+                  ? "Confirmar inscrição"
+                  : "Gerar Pix"}
+            </button>
+          )}
 
           <p className="text-center text-xs text-white/30">
             Ao continuar você concorda com os termos de uso e a política de privacidade.
