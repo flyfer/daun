@@ -153,6 +153,9 @@ export default async function ManageEventPage({
                     <td className="px-4 py-3">
                       <p>{o.buyerName}</p>
                       <p className="text-xs text-white/40">{o.buyerEmail}</p>
+                      {o.buyerPhone && (
+                        <p className="text-xs text-white/40">{o.buyerPhone}</p>
+                      )}
                     </td>
                     <td className="px-4 py-3">
                       {o.items.reduce((s, i) => s + i.quantity, 0)}
