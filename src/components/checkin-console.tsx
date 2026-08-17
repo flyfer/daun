@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useRef, useState } from "react";
+import { QrScanner } from "@/components/qr-scanner";
 
 type Result = {
   result: string;
@@ -47,10 +48,11 @@ export function CheckinConsole({
     inputRef.current?.focus();
   }, [history]);
 
-  async function validate(e: React.FormEvent) {
-    e.preventDefault();
-    const value = code.trim();
-    if (!value || busy) return;
+  const busyRef = useRef(false);
+
+  async function submitCode(value: string) {
+    if (!value || busyRef.current) return;
+    busyRef.current = true;
     setBusy(true);
     try {
       const res = await fetch("/api/organizer/checkin", {
@@ -71,8 +73,20 @@ export function CheckinConsole({
       if (entry.result === "OK") setUsed((u) => u + 1);
       setCode("");
     } finally {
+      busyRef.current = false;
       setBusy(false);
     }
+  }
+
+  function validate(e: React.FormEvent) {
+    e.preventDefault();
+    submitCode(code.trim());
+  }
+
+  function handleScan(value: string) {
+    const clean = value.trim();
+    setCode(clean);
+    submitCode(clean);
   }
 
   const last = history[0];
@@ -111,6 +125,10 @@ export function CheckinConsole({
             {busy ? "..." : "Validar"}
           </button>
         </form>
+
+        <div className="mt-3">
+          <QrScanner onScan={handleScan} />
+        </div>
       </div>
 
       {last && (
