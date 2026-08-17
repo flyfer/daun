@@ -49,6 +49,43 @@ export function CheckinConsole({
   }, [history]);
 
   const busyRef = useRef(false);
+  const audioCtxRef = useRef<AudioContext | null>(null);
+
+  // Precisa ser criado/retomado dentro de um toque do usuário (política de
+  // autoplay do Safari/iOS), então "destravamos" no primeiro toque na tela
+  // em vez de esperar o resultado da validação, que chega depois de um await.
+  function primeAudio() {
+    try {
+      const AudioCtx =
+        window.AudioContext ||
+        (window as unknown as { webkitAudioContext: typeof AudioContext })
+          .webkitAudioContext;
+      const ctx = (audioCtxRef.current ??= new AudioCtx());
+      if (ctx.state === "suspended") ctx.resume();
+    } catch {
+      // sem suporte a Web Audio — beep() vai falhar em silêncio depois.
+    }
+  }
+
+  function beep(ok: boolean) {
+    try {
+      const ctx = audioCtxRef.current;
+      if (!ctx) return;
+      const osc = ctx.createOscillator();
+      const gain = ctx.createGain();
+      osc.connect(gain);
+      gain.connect(ctx.destination);
+      osc.type = "sine";
+      osc.frequency.value = ok ? 880 : 220;
+      gain.gain.setValueAtTime(0.001, ctx.currentTime);
+      gain.gain.exponentialRampToValueAtTime(0.2, ctx.currentTime + 0.01);
+      gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
+      osc.start();
+      osc.stop(ctx.currentTime + 0.25);
+    } catch {
+      // Áudio é só um reforço; se falhar, o feedback visual já basta.
+    }
+  }
 
   async function submitCode(value: string) {
     if (!value || busyRef.current) return;
@@ -70,6 +107,7 @@ export function CheckinConsole({
         at: new Date(),
       };
       setHistory((h) => [entry, ...h].slice(0, 30));
+      beep(entry.result === "OK");
       if (entry.result === "OK") setUsed((u) => u + 1);
       setCode("");
     } finally {
@@ -92,7 +130,7 @@ export function CheckinConsole({
   const last = history[0];
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" onPointerDownCapture={primeAudio}>
       <div className="card">
         <div className="mb-4 flex items-end justify-between">
           <div>
