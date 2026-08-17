@@ -61,7 +61,6 @@ export default async function EventPage({
       <div className="relative overflow-hidden rounded-3xl border border-white/10 bg-ink-900">
         <div className="relative aspect-21/9 max-h-80 w-full bg-ink-800">
           <CoverImage src={event.coverUrl} alt={event.title} />
-          <div className="absolute inset-0 bg-linear-to-t from-ink-900 via-ink-900/40 to-transparent" />
         </div>
 
         <div className="space-y-3 p-6 sm:p-8">
