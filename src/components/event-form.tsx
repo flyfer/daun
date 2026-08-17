@@ -83,9 +83,29 @@ export function EventForm({
   const [rows, setRows] = useState<TicketRow[]>([emptyRow()]);
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+  const [uploading, setUploading] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   const set = (k: keyof typeof form) => (e: { target: { value: string } }) =>
     setForm({ ...form, [k]: e.target.value });
+
+  async function handleCoverFile(file: File | undefined) {
+    if (!file) return;
+    setUploadError(null);
+    setUploading(true);
+    try {
+      const body = new FormData();
+      body.append("file", file);
+      const res = await fetch("/api/organizer/upload", { method: "POST", body });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error ?? "Não foi possível enviar a imagem.");
+      setForm((f) => ({ ...f, coverUrl: data.url }));
+    } catch (e) {
+      setUploadError(e instanceof Error ? e.message : "Erro inesperado.");
+    } finally {
+      setUploading(false);
+    }
+  }
 
   const updateRow = (i: number, patch: Partial<TicketRow>) =>
     setRows(rows.map((r, idx) => (idx === i ? { ...r, ...patch } : r)));
@@ -172,13 +192,40 @@ export function EventForm({
           </div>
         </div>
         <div>
-          <label className="label">URL da imagem de capa (opcional)</label>
-          <input
-            className="input"
-            value={form.coverUrl}
-            onChange={set("coverUrl")}
-            placeholder="https://..."
-          />
+          <label className="label">Imagem de capa (opcional)</label>
+          {form.coverUrl && (
+            <div className="mb-2 overflow-hidden rounded-xl border border-white/10">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src={form.coverUrl} alt="" className="aspect-21/9 w-full object-cover" />
+            </div>
+          )}
+          <div className="flex flex-wrap items-center gap-3">
+            <label className="btn-ghost cursor-pointer !px-4 !py-2 !text-sm">
+              {uploading
+                ? "Enviando..."
+                : form.coverUrl
+                  ? "Trocar imagem"
+                  : "Enviar imagem"}
+              <input
+                type="file"
+                accept="image/jpeg,image/png,image/webp,image/gif"
+                className="hidden"
+                disabled={uploading}
+                onChange={(e) => handleCoverFile(e.target.files?.[0])}
+              />
+            </label>
+            {form.coverUrl && (
+              <button
+                type="button"
+                className="text-xs text-white/40 underline hover:text-white"
+                onClick={() => setForm({ ...form, coverUrl: "" })}
+              >
+                remover
+              </button>
+            )}
+          </div>
+          {uploadError && <p className="mt-1 text-xs text-red-300">{uploadError}</p>}
+          <p className="mt-1 text-xs text-white/40">JPG, PNG, WEBP ou GIF · até 5MB.</p>
         </div>
         <div>
           <label className="label">Descrição</label>
