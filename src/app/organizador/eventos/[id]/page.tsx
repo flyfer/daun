@@ -85,6 +85,9 @@ export default async function ManageEventPage({
           <Link href={`/organizador/eventos/${event.id}/checkin`} className="btn-primary">
             Check-in
           </Link>
+          <a href={`/api/organizer/events/${event.id}/export`} className="btn-ghost">
+            Baixar lista de convidados
+          </a>
         </div>
       </div>
 
