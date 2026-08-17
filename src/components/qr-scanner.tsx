@@ -31,9 +31,17 @@ export function QrScanner({ onScan }: { onScan: (code: string) => void }) {
         audio: false,
       });
       streamRef.current = stream;
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        await videoRef.current.play();
+      const video = videoRef.current;
+      if (video) {
+        video.srcObject = stream;
+        // Em alguns navegadores (principalmente Android) dar play antes dos
+        // metadados carregarem resulta em vídeo preto — mesmo com a câmera
+        // ativa. Esperar loadedmetadata evita a corrida.
+        await new Promise<void>((resolve) => {
+          if (video.readyState >= 1) return resolve();
+          video.onloadedmetadata = () => resolve();
+        });
+        await video.play();
       }
       setActive(true);
       tick();
@@ -72,23 +80,26 @@ export function QrScanner({ onScan }: { onScan: (code: string) => void }) {
 
   return (
     <div className="space-y-2">
-      {active ? (
-        <div className="space-y-2">
-          <div className="overflow-hidden rounded-xl border border-white/10 bg-black">
-            <video
-              ref={videoRef}
-              muted
-              playsInline
-              autoPlay
-              className="aspect-square w-full object-cover"
-            />
-          </div>
-          <canvas ref={canvasRef} className="hidden" />
-          <button type="button" className="btn-ghost w-full" onClick={stop}>
-            Fechar câmera
-          </button>
-        </div>
-      ) : (
+      {/*
+        O <video> fica sempre montado (só escondido via CSS) para que
+        videoRef.current já exista quando start() roda — se ele só fosse
+        renderizado depois de setActive(true), o stream nunca teria onde
+        ser conectado e a câmera abriria com a tela preta.
+      */}
+      <div className={active ? "space-y-2" : "hidden"}>
+        <video
+          ref={videoRef}
+          muted
+          playsInline
+          autoPlay
+          className="aspect-square w-full rounded-xl border border-white/10 bg-black object-cover"
+        />
+        <canvas ref={canvasRef} className="hidden" />
+        <button type="button" className="btn-ghost w-full" onClick={stop}>
+          Fechar câmera
+        </button>
+      </div>
+      {!active && (
         <button type="button" className="btn-ghost w-full" onClick={start}>
           📷 Escanear com a câmera
         </button>
